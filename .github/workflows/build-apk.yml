@@ -1,0 +1,28 @@
+name: build-apk
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check files
+        run: |
+          test -f settings.gradle || { echo "::error::settings.gradle is not in the repository root. Upload the files inside the android_project folder, not the folder itself."; exit 1; }
+          test -f app/src/main/cpp/feedback_intel_web.cpp || { echo "::error::app/src/main/cpp/feedback_intel_web.cpp is missing. The app folder did not upload fully."; exit 1; }
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+      - name: Build the APK
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon 2>&1 | tee build.log || { grep -E "error:|FAILED|went wrong|Could not|not found|No version|license" -A1 build.log | head -24 | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feedback_intel_apk
+          path: app/build/outputs/apk/debug/app-debug.apk
